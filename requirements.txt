@@ -1,0 +1,9 @@
+pyyaml
+numpy
+scipy
+mne
+scikit-learn
+pyriemann
+pyxdf
+pymanopt==0.2.5
+autograd

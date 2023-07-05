@@ -1,0 +1,44 @@
+ppts_to_include: 
+  - kh9
+  - kh10
+  - kh11
+  - kh12
+  - kh13
+  - kh15
+  - kh18
+  - kh30
+
+explore:
+  do: 1
+  pca: True
+
+
+decode:
+  n_folds: 10
+  shuffle: 0
+  n_components: [3, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50]
+  dropout: 0
+
+filters:
+  beta:
+    - 12
+    - 30
+  hg:
+    - 55
+    - 90
+
+paths:
+  data: ./data/
+  save: ./results/
+
+plot:
+  raw: 0
+  pre: 0
+
+log:
+  level: 'info'
+
+debug:
+  do: 0
+  log: 1
+  size: 200000  # n samples  
