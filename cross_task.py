@@ -1,14 +1,9 @@
 # Builtin
 import cProfile
 import logging
-from itertools import product
-
-# 3th party
-import yaml
 
 # Local
-import setup
-from libs.explore import explore
+import setup_pipeline
 from libs.load.load_yaml import load_yaml
 from libs.load import load_session
 from libs.load.load_filenames import get_filesets
@@ -16,8 +11,6 @@ from libs.load.load_filenames import get_filesets
 from libs.process_session import process_session as process
 from libs import split_to_trials
 from libs.learn_cross_task import decode as decode_cross_task
-
-from libs.plotting import plot_raw, plot_pre
 
 logger = logging.getLogger(__name__)
 c = load_yaml('./config.yml')
@@ -126,12 +119,12 @@ def run_pipeline(savepath):
 
 def main():
 
-    savepath = setup.setup()
+    savepath = setup_pipeline.setup()
 
     with cProfile.Profile() as pr:
         run_pipeline(savepath)
 
-    setup.profiler(pr, savepath)
+    setup_pipeline.profiler(pr, savepath)
 
 if __name__=='__main__':
     main()

@@ -1,9 +1,9 @@
-pyyaml
-numpy
-scipy
-mne
-scikit-learn
-pyriemann
-pyxdf
-pymanopt==0.2.5
-autograd
+# python==3.9.7
+numpy==1.25.0
+scipy==1.11.1
+mne==1.4.2
+matplotlib==3.7.1
+pyriemann==0.5
+scikit-learn==1.2.2
+pyxdf==1.16.4
+pyyaml==6.0

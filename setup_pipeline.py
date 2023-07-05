@@ -5,9 +5,6 @@ import pstats
 from pathlib import Path
 from datetime import datetime as dt
 
-# 3th party
-import yaml
-
 # Local
 from libs.load.load_yaml import load_yaml
 

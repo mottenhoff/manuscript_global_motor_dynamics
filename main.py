@@ -3,16 +3,12 @@ import cProfile
 import logging
 from itertools import product
 
-# 3th party
-import yaml
-
 # Local
-import setup
+import setup_pipeline
 from libs.explore import explore
 from libs.load.load_yaml import load_yaml
 from libs.load import load_session
 from libs.load.load_filenames import get_filesets
-
 from libs.process_session import process_session as process
 from libs import split_to_trials
 from libs.learn import decode_dropout
@@ -97,12 +93,12 @@ def run_pipeline(savepath):
 
 def main():
 
-    savepath = setup.setup()
+    savepath = setup_pipeline.setup()
 
     with cProfile.Profile() as pr:
         run_pipeline(savepath)
 
-    setup.profiler(pr, savepath)
+    setup_pipeline.profiler(pr, savepath)
 
 if __name__=='__main__':
     main()
