@@ -2,7 +2,6 @@ from itertools import product
 
 import matplotlib.pyplot as plt
 import numpy as np
-from matplotlib.gridspec import GridSpec
 from scipy import stats
 
 from libs import mappings
@@ -17,6 +16,15 @@ AUC = 0
 BAC = 1
 TRAIN = 0
 TEST = 1
+
+def fdrcorrection(p):
+    """Benjamini-Hochberg p-value correction for multiple hypothesis testing."""
+    p = np.asfarray(p)
+    by_descend = p.argsort()[::-1]
+    by_orig = by_descend.argsort()
+    steps = float(len(p)) / np.arange(len(p), 0, -1)
+    q = np.minimum(1, np.minimum.accumulate(steps * p[by_descend]))
+    return q[by_orig]
 
 def annotate_min_max(ax):
 
@@ -49,7 +57,7 @@ def plot_panel(ax, data):
     mean, std = aucs.mean(axis=1), aucs.std(axis=1)
 
     t, p = stats.ttest_1samp(aucs, .5, axis=1)
-    p = p * mean.size  # Bonferonni
+    p = fdrcorrection(p)
 
     facecolors = np.where(p<0.05, 'black', 'lightgrey')
     edgecolors = ['black'] * facecolors.size
