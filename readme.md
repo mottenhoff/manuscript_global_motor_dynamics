@@ -3,7 +3,7 @@ Maarten C. Ottenhoff*, Maxime Verwoert, Sophocles Goulis , Louis Wagner , Johann
 *Corresponding author
 
 ## Description
-Code accompanying the paper. The data accompanying the paper will be made available for free on publication.
+Code accompanying the paper. The data will be made publicly available at publication.
 
 ## Installation
 Using a conda environment: \
