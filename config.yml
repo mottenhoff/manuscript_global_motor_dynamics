@@ -1,0 +1,47 @@
+parallel: 0
+n_processes: 16
+
+ppts_to_include: 
+  - p1
+  - p2
+  - p3
+  - p4
+  - p5
+  - p6
+  - p7
+  - p8
+
+explore:
+  do: 0
+  pca: True
+
+
+decode:
+  n_folds: 10
+  shuffle: 0
+  n_components: [3, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50]
+  dropout: 0
+
+filters:
+  beta:
+    - 12
+    - 30
+  hg:
+    - 55
+    - 90
+
+paths:
+  data: ./data/
+  save: ./results/
+
+plot:
+  raw: 0
+  pre: 1
+
+log:
+  level: 'info'
+
+debug:
+  do: 0
+  log: 1
+  size: 200000  # n samples  
