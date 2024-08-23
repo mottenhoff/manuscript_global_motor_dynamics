@@ -1,13 +1,11 @@
 import logging
-from dataclasses import dataclass
+from itertools import permutations
 
 import numpy as np
 import pyriemann
-from sklearn.preprocessing import LabelEncoder, StandardScaler
-from sklearn.model_selection import StratifiedKFold
+from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import PCA
-from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
-from sklearn.metrics import roc_auc_score, balanced_accuracy_score, confusion_matrix, roc_curve
+from sklearn.metrics import roc_auc_score, balanced_accuracy_score, confusion_matrix
 from sklearn.pipeline import make_pipeline
 
 from libs.load.load_yaml import load_yaml
@@ -15,7 +13,7 @@ from libs.load.load_yaml import load_yaml
 GRASP, IMAGINE = 0, 1
 TRAIN, TEST = 0, 1
 
-REST = 'rest'
+REST = 0
 MOVE = 1
 
 TRIALS = 0
@@ -30,43 +28,7 @@ def unsplit(x):
     # Expects [trials x samples x channels]
     return np.vstack(x) 
 
-def save(savepath, **kwargs):
-
-    for name, result in kwargs.items():
-        
-        if name == 'train':
-            continue
-
-        elif name == 'test':
-
-            with open(savepath/'fold_idc.npy', 'wb') as f:
-                np.save(f, np.array([r.fold[TEST] for r in result]))
-
-            with open(savepath/'confusion_matrices.npy', 'wb') as f:
-                np.save(f, np.dstack([r.metrics.cm for r in result]).transpose(2, 0, 1))
-
-            if result[0].pca.n_components != 50:
-                continue
-
-            evs = np.stack([np.vstack([fold.pca.explained_variance_, 
-                                       fold.pca.explained_variance_ratio_]).T
-                            for fold in result])
-            with open(savepath/'explained_variances.npy', 'wb') as f:
-                np.save(f, evs)
-
-            principle_axes = np.dstack([fold.pca.components_ for fold in result])
-            with open(savepath/'principal_axes.npy', 'wb') as f:
-                np.save(f, principle_axes)
-
-        with open(savepath/f'aucs_{name}.npy', 'wb') as f:
-            np.save(f, np.array([r.metrics.auc for r in result]))
-
-        predictions = np.vstack([np.hstack([fold.y_hat, fold.y[:, np.newaxis]]) for fold in result])
-        with open(savepath/f'predictions_{name}.npy', 'wb') as f:
-            np.save(f, predictions)
-
-def score(y, y_hat):
-
+def evaluate(y, y_hat):
     return roc_auc_score(y, y_hat[:, MOVE]), \
            balanced_accuracy_score(y, np.argmax(y_hat, axis=1)), \
            confusion_matrix(y, np.argmax(y_hat, axis=1))
@@ -75,7 +37,6 @@ def pca_fit(n_components, x):
     pca = make_pipeline(StandardScaler(),
                         PCA(n_components=n_components))
     return pca.fit(unsplit(x))
-
 
 def fit_decoder(x, y, n_components):
 
@@ -115,7 +76,6 @@ def run_decoder(x, pca, decoder):
 
     return decoder.predict_proba(x_pcs)
 
-
 def drop_channels(x, dropout):
     
     n_dims = x.shape[-1]  # = [trials x samples x pcs]
@@ -124,7 +84,6 @@ def drop_channels(x, dropout):
     n_chs_to_drop = np.round(n_dims * (1-dropout)).astype(np.int)
     
     if n_chs_to_drop < 1:
-        # print(f'Not enough channels to drop. Skipping {dropout}')
         return x_dropout, np.empty(0)
 
     chs_to_drop = np.random.choice(np.arange(n_dims), n_chs_to_drop, replace=False)
@@ -133,44 +92,56 @@ def drop_channels(x, dropout):
 
     return x_dropout, chs_to_drop
 
-def decode(sessions, savepath):
+def decode(train, test, n_components):
+
+    x_test, x_train = test.trials, train.trials
+    y_train = train.trial_labels
+
+    pca, decoder = fit_decoder(x_train, y_train, n_components)
+
+    y_hat_train = run_decoder(x_train, pca, decoder)
+    y_hat_test =  run_decoder(x_test, pca, decoder)
+
+    return y_hat_train, y_hat_test
+
+def decode_cross(sessions, savepath):
 
     components = [3, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50]
-    # dropouts =   [1, .9, .8, .7, .6, .5]
+    n_components = len(components)
+    n_classes = 2
+    n_metrics = 2
+
     logger.info(f'Saving results to {savepath}')
 
     for session in sessions:
         session.trial_labels = np.where(session.trial_labels=='rest', REST, MOVE)
 
-    labels_encoders = [LabelEncoder().fit(s.trial_labels) for s in sessions]
-
-    n_classes =    2                 # label_encoder.classes_.size
-    n_folds =      1
-    n_metrics =    2
-
-    full_results =               np.empty((n_folds, n_metrics, 2))  # 2 = [train, test]
-    full_confusion_matrices =    np.empty((n_folds, n_classes, n_classes))  # Only test
-
-    for component in components:
+    for train, test in permutations(sessions):
         
-        path = savepath/f'pc{component}'/f'{session.ppt_id}'
+        logger.info(f'\n{train.name} to {test.name}')
+
+        results_train = np.empty((n_components, n_metrics))
+        results_test =  np.empty((n_components, n_metrics))
+        cms_train =     np.empty((n_components, n_classes, n_classes))
+        cms_test =      np.empty((n_components, n_classes, n_classes))
+        
+        for idx_components, num_components in enumerate(components):
+            
+            y_hat_train, y_hat_test = decode(train, test, num_components)
+            auc_train, bac_train, cm_train = evaluate(train.trial_labels, y_hat_train)
+            auc_test, bac_test, cm_test = evaluate(test.trial_labels,  y_hat_test)
+
+            results_train[idx_components, :] = [auc_train, bac_train]
+            results_test[idx_components, :] =  [auc_test, bac_test]
+            cms_train[idx_components, :, :] = cm_train
+            cms_test[idx_components, :, :] = cm_test
+
+            logger.info(f'{train.ppt_id:<2s} | pc: {num_components:<3d} | Train: {auc_train:<5.2f} ({train.name}) | Test: {auc_test:<5.2f} ({test.name})')
+
+        path = savepath/train.ppt_id/f'{train.name}-to-{test.name}'
         path.mkdir(parents=True, exist_ok=True)
 
-        x_test, x_train = sessions[IMAGINE].trials, sessions[GRASP].trials
-        y_test =  labels_encoders[IMAGINE].transform(sessions[IMAGINE].trial_labels)
-        y_train = labels_encoders[GRASP].transform(sessions[GRASP].trial_labels)
-
-        # Fit and transform
-        pca, decoder = fit_decoder(x_train, y_train, component)
-        y_hat_train = run_decoder(x_train, pca, decoder)
-        y_hat_test = run_decoder(x_test, pca, decoder)
-        
-        scores_train, scores_test = score(y_train, y_hat_train), score(y_test,  y_hat_test)
-
-        logger.info(f'{session.ppt_id:<5s} | pc: {component:<3d} | Train: {scores_train[0]:<5.2f} | Test: {scores_test[0]:<5.2f}')
-        
-        full_results[0, :, :] = np.vstack([scores_train[:2], scores_test[:2]]).T
-        full_confusion_matrices[0, :, :] = scores_test[-1]
-        
-        with open(path/'full.npy', 'wb') as f:
-            np.save(f, full_results)
+        np.save(path/'results_train.npy', results_train)
+        np.save(path/'results_test.npy', results_test)
+        np.save(path/'confusion_matrices_train.npy', cms_train)
+        np.save(path/'confusion_matrices_test.npy', cms_test)

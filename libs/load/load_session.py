@@ -1,8 +1,6 @@
 import bisect
 import logging
 from dataclasses import dataclass
-from datetime import datetime
-from os.path import getctime 
 from pathlib import Path
 
 import numpy as np
@@ -13,7 +11,7 @@ from libs.load import load_locations
 @dataclass
 class Session:
     ppt_id: int
-    type: str
+    name: str
     eeg: np.array
     ts: np.array
     fs: int
@@ -21,10 +19,6 @@ class Session:
     channels: np.array
     trial_nums: np.array
     trial_names: np.array
-
-def _get_created_date(file, dt_format='%Y%m%d%H%M%S'):
-    # Returns the formatted date of creation of a file
-    return datetime.fromtimestamp(getctime(file)).strftime(dt_format)
 
 def _locate_pos(available_tss, target_ts):
     # Locate the the closest index within a list of indices
@@ -65,7 +59,6 @@ def _get_trials_info(eeg, eeg_ts, markers, marker_ts):
     return np.array(trial_seq), np.array(trial_nums)
 
 def _get_experiment_data(result):
-    # TODO: Offset markers? (see load_grasp_data)
     marker_idx_exp_start = result['GraspMarkerStream']['data'].index(['experimentStarted'])
     marker_idx_exp_end =   result['GraspMarkerStream']['data'].index(['experimentEnded'])
 
@@ -97,7 +90,7 @@ def load_grasp_seeg(file):
     trials = np.vectorize(label_map.get)(trials)
 
     seeg = {}
-    seeg['subject'] =           file.parent
+    seeg['subject'] =           file.parent.name
     seeg['experiment_type'] =   file.stem
     seeg['channel_names'] =     result['Micromed']['channel_names']
     seeg['eeg'] =               eeg.astype(np.float64)
@@ -120,15 +113,14 @@ def load(paths):
     locs = load_locations.load(path_locs)
 
     s = Session(
-        ppt_id =      seeg['subject'],
-        type =        seeg['experiment_type'],
-        eeg =         seeg['eeg'],
-        ts =          seeg['eeg_ts'],
-        fs =          seeg['fs'],
-        channels =    seeg['channel_names'],
-        trial_nums =  seeg['trial_numbers'],
-        trial_names = seeg['trial_labels'],
-        anatomical_location = locs,
+        ppt_id =              seeg['subject'],
+        name =                seeg['experiment_type'],
+        eeg =                 seeg['eeg'],
+        ts =                  seeg['eeg_ts'],
+        fs =                  seeg['fs'],
+        channels =            seeg['channel_names'],
+        trial_nums =          seeg['trial_numbers'],
+        trial_names =         seeg['trial_labels'],
+        anatomical_location = locs
     )
-
     return s
