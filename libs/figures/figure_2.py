@@ -23,6 +23,7 @@ IMAG_BETA, IMAG_HG, IMAG_BGH = 3, 4, 5
 PCS = [3, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50]
 N_PCS =  len(PCS)
 N_PPTS = len(mappings.PPTS)
+N_FOLDS = 10
 
 
 def fdrcorrection(p):
@@ -65,7 +66,7 @@ def get_data(main_path, type_):
     paths = sorted(paths, key=sort_by_key_and_participants)
     
     data = np.array([np.load(path)[:, AUC, TEST] for path in paths])
-    data = data.reshape(-1, 8, 10)
+    data = data.reshape(-1, N_PPTS, N_FOLDS)
 
     return data
 
