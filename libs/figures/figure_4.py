@@ -1,26 +1,31 @@
 from pathlib import Path
-from collections import defaultdict
-from itertools import permutations, product
-from math import floor
+from itertools import product
 
 import numpy as np
 import matplotlib.pyplot as plt
-
-import matplotlib.cm as cm
 from matplotlib.gridspec import GridSpec
-from scipy.stats import ttest_1samp, ttest_ind, rankdata
+from scipy.stats import ttest_1samp
 
 from libs import mappings
-from libs.figures.figure_4_cross_task import plot_panel as plot_cross_task_panel
-from libs.figures.figure_4_variation_in_pc import plot_panel as plot_first_components_distributions
-from libs.figures.figure_4_variation_in_pc import get_covs_per_class
-from libs.figures.figure_4_variation_in_pc import get_data as get_data_first_components
+from libs.figures.figure_4_cross_task import plot_panel as plot_panel_cross_task
+from libs.figures.figure_4_variation_in_pc import load_covariance_matrices
+from libs.figures.figure_4_variation_in_pc import plot_panel as plot_panel_first_components
 
 BETA, HG, BHG = 0, 1, 2
+AUC = 0
+TEST = 1
+
+PCS = [3, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50]
+N_PPTS = len(mappings.PPTS)
+N_FOLDS = 10
+
+PC_IDX = -3
+PPT_IDX = -2
+TEN_PCS = 10
+TEN_PCS_IDX = 2
 
 def fdrcorrection(p):
     """Benjamini-Hochberg p-value correction for multiple hypothesis testing."""
-    # p = np.asfarray(p)
     p = np.array(p, dtype=np.float64)
     by_descend = p.argsort()[::-1]
     by_orig = by_descend.argsort()
@@ -30,46 +35,81 @@ def fdrcorrection(p):
 
 def annote_significance_above_max_y_value(ax, y_values: list, p_values: list):
 
-    x_ticks = ax.get_xticks()
-
     is_sig =  lambda p_value: '***' if p_value < 0.001 else \
                               '**'  if p_value < 0.01  else \
                               '*'   if p_value < 0.05  else \
                               'n.s'
-
+    
+    x_ticks = ax.get_xticks()
     for x_tick, y_value, p_value in zip(x_ticks, y_values, p_values):
         ax.annotate(f'{is_sig(p_value)}', xy=(x_tick, y_value+0.05), ha='center', va='bottom', fontsize='x-large')
 
     return ax
 
-def get_data(path, type_):
+def sort_by_key_and_participants(path):
 
-    # data = [pcs, ppts, folds, metrics, train/test]    
+    pc_keys = [f'pc{pc}' for pc in PCS]
+    ppt_keys = mappings.PPTS
+    indices = list(product(pc_keys, ppt_keys))
 
-    dirs = [d for d in path.iterdir() if d.is_dir() and 'pc' in d.stem]
-    dirs = sorted(dirs, key=lambda x:int(x.stem[2:]))
+    parts = path.parts
+    return indices.index((parts[PC_IDX], parts[PPT_IDX]))
 
-    data = []
-    for d in dirs:
-        data += [np.stack([np.load(ppt/f'{type_}.npy') for ppt in d.iterdir()])]
+def get_data(main_path, type_):
+    '''
+    Returns AUCS of TEST: shape = [n_pcs, n_ppts, n_folds, n_repeats]
+    '''
+    paths = main_path.rglob(f'{type_}.npy')
+    paths = sorted(paths, key=sort_by_key_and_participants)
+    
+    data = np.array([np.load(path)[:, AUC, TEST] for path in paths])  # shape = [10 x 6 x 10]
+    data = data.reshape(-1, N_PPTS, N_FOLDS)
 
-    return np.stack(data)
+    return data
 
-def plot_panel_source(ax, data):
+def get_cross_data(main_path):
 
-    # data = 8 x 7 --> each row = source, each column is target
+    result = {}
+    for direction in ['grasp-to-imagine', 'imagine-to-grasp']:
+        paths = sorted(main_path.rglob(f'{direction}/results_test.npy'), key=lambda p: p.parts[-3])
+        result[direction] = np.stack([np.load(path) for path in paths])
+
+    return result
+
+def load_transfer_learning_data(path, task, filter_):
+    ''' Data is returned in a 8 x 7 matrix, following the
+    pattern below. A diagonal of zeroes is added to make
+    an 8x8 matrix and align the rows and column to reflect
+    the correct participants.
+
+    sanity_check = np.array([[2,3,4,5,6,7,8],
+                             [1,3,4,5,6,7,8],
+                             [1,2,4,5,6,7,8],
+                             [1,2,3,5,6,7,8],
+                             [1,2,3,4,6,7,8],
+                             [1,2,3,4,5,7,8],
+                             [1,2,3,4,5,6,8],
+                             [1,2,3,4,5,6,7]])
+    sc = np.vstack([np.insert(row, i, 0) for i, row in enumerate(sanity_check)])
+    '''
+
+    path = path/f'pc{TEN_PCS}'/f'{task}'/f'{filter_}'/'transfer_auc.npy'
+    data = np.load(path).reshape(8, 7)
+    
+    # insert a diagonal of zeroes to create an 8x8 matrix
     data = np.vstack([np.insert(row, i, 0) for i, row in enumerate(data)])
     
-    # Source
-    if target := False:
-        data = data.T
+    return data
 
+def plot_panel_transfer_learning(ax, data):
+
+    # Remove the zero diagonal
     data = [row[np.where(row!=0)] for row in data]
 
     pvalues = ttest_1samp(data, .5, axis=1, alternative='two-sided').pvalue
     pvalues = fdrcorrection(pvalues)
 
-    ppts = sorted(mappings.kh_to_ppt().values())
+    ppts = mappings.PPTS
     colors = [mappings.color_map()[ppt] for ppt in ppts]
 
     # Create a violinplot for each column of the matrix
@@ -81,8 +121,8 @@ def plot_panel_source(ax, data):
     vp['cmeans'].set_color('black')    
     
     # Customize the plot
-    ax.set_xticks(np.arange(1, 9))
-    ax.set_xticklabels([ppt[1:] for ppt in ppts], fontsize='x-large')
+    ax.set_xticks(np.arange(N_PPTS)+1)
+    ax.set_xticklabels(mappings.PPTS, fontsize='x-large')
 
     ax.set_title('Cross-participant', fontsize='xx-large')
     ax.set_xlabel('Source participant' if not target else 'Target participant', fontsize='xx-large')
@@ -101,42 +141,14 @@ def plot_panel_source(ax, data):
     for i, d in enumerate(data, start=1):
         x = i + np.linspace(-d.size/2, d.size/2, d.size) * 0
         cs = [tuple(c) for c in np.delete(colors, i-1, axis=0)]
-        ax.scatter(x, d, s=20, c=cs, alpha=0.75)
+        ax.scatter(x, d, s=20, c=cs, alpha=1) # 0.75
 
     return ax
 
-def add_to_cross_task_plot(ax, data, cross_data):
-    AUC, TEST = 0, 1
-    pcs = np.concatenate([[3], np.arange(5, 51, 5)])
+def plot_matrix(ax, data, data_within):
 
-    cross_data = cross_data[:, :, :, AUC, TEST].squeeze()  # shape = (11, 8, 1, 2, 2)
-
-    aucs = data[:, :, :, AUC, TEST].reshape(data.shape[0], np.multiply(*data.shape[1:3]))
-
-    pvals = np.array([ttest_ind(auc_c, auc_w).pvalue for auc_c, auc_w in zip(cross_data, aucs)])
-
-    facecolors = np.where(pvals * len(pvals) < 0.05, 'black', 'lightgrey')
-
-    ax.plot((-100, -100), (-101, -101), linestyle='solid', color='black', label='cross task')  # Hack for legend label
-    ax.plot(pcs, aucs.mean(axis=1), linestyle='dashed', color='black', label='within task', zorder=1)
-    ax.scatter(pcs, aucs.mean(axis=1), facecolor=facecolors, edgecolor='black', s=25, zorder=2)
-
-    ax.tick_params(axis='both', which='major', labelsize='x-large')
-
-    ax.legend(frameon=False, loc='upper left')
-
-    ax.set_xlabel('Principal components', fontsize='xx-large')
-    ax.set_ylim(0.4, 1)
-
-    return ax
-
-def plot_matrix(ax, data, within_results):
-
-    # Add the diagonal
-    # data = np.vstack([np.insert(row, i, 0) for i, row in enumerate(data)])
-    data = np.vstack([np.insert(row, i, within_results[i]) for i, row in enumerate(data)])
-
-    # mean_cross_vs_within = np.array([(np.hstack([row[:i], row[i+1:]]).mean(), row[i]) for i, row in enumerate(data.T)])  # ppt as target
+    # Add within ppt scores on the diagonal
+    data[np.arange(N_PPTS), np.arange(N_PPTS)] = data_within  
 
     ax.imshow(data, cmap='plasma', vmin=0.25, vmax=1)
 
@@ -148,8 +160,7 @@ def plot_matrix(ax, data, within_results):
     ax.set_xlabel('Target participant', fontsize='xx-large')
     ax.set_ylabel('Source participant', fontsize='xx-large')
     
-    ppts = sorted(mappings.kh_to_ppt().values())
-    ppts = [ppt[1:] for ppt in ppts]
+    ppts = [ppt[1:] for ppt in mappings.PPTS]
 
     ax.set_xticks(np.arange(len(ppts)))
     ax.set_xticklabels(ppts, fontsize='large')
@@ -157,69 +168,42 @@ def plot_matrix(ax, data, within_results):
     ax.set_yticklabels(ppts, fontsize='large')
     ax.invert_yaxis()
 
-    return ax
-
-def plot_first_component(ax):
-
-    path = Path('./results/full_run')
-    
-    tasks =   ['grasp'] 
-    filters = ['beta']
-
-    # load data outside of loop
-    data = {f'{t}_{f}': get_data_first_components(path/t/f) for t, f in product(tasks, filters)}
-
-    # Calculate samples covariance matrices
-    move, _, rest, _ = get_covs_per_class(data)
-
-    ax = plot_first_components_distributions(ax, move, rest)
-
-    ax.tick_params(axis='both', which='major', labelsize='x-large')
+    ax.set_title('Cross-participant', fontsize='xx-large')
 
     return ax
 
 def make(path):
-    npcs = 10
-    filters = ('beta', 'hg', 'betahg')
+    filters = ['beta'] #, 'hg', 'betahg')
+    task = ('grasp')  # For transfer learning
 
     path_cross_task = Path(r'results/cross_task/')
     path_full =       Path(r'results/full_run/')
     
-    decoding_data = [get_data(path_full/'imagine'/filter_, 'full') for filter_ in filters][BETA] 
-    cross_data =    [get_data(path_cross_task/filter_,     'full') for filter_ in filters][BETA]
-    decoding_data_exec = [get_data(path_full/'grasp'/filter_, 'full') for filter_ in filters][BETA] 
-    # decoding_data = [get_data(path_full/'imagine'/filter_, 'full') for filter_ in filters][HG] 
-    # cross_data =    [get_data(path_cross_task/filter_,     'full') for filter_ in filters][HG]
-    # decoding_data = [get_data(path_full/'imagine'/filter_, 'full') for filter_ in filters][BHG] 
-    # cross_data =    [get_data(path_cross_task/filter_,     'full') for filter_ in filters][BHG]
-    
-    transfer_learning = np.load(path/f'pc{npcs}/grasp/beta/transfer_auc.npy').reshape(8, 7)  # TODO
-    # transfer_learning = np.load(path/f'pc{npcs}/grasp/betahg/transfer_auc.npy').reshape(8, 7)  # TODO
+    decoding_exec =  [get_data(path_full/'grasp'/filter_,   'full') for filter_ in filters][0]
+    decoding_imag =  [get_data(path_full/'imagine'/filter_, 'full') for filter_ in filters][0]
+    decoding_cross = [get_cross_data(path_cross_task/filter_) for filter_ in filters][0]
+    decoding_trans = [load_transfer_learning_data(path, task, filter_) for filter_ in filters][0]
+    covariance_move, covariance_rest = [load_covariance_matrices(path_full/'grasp'/filter_)\
+                                        for filter_ in filters][0]
 
     grid = GridSpec(2, 5)
     fig = plt.figure(figsize=(16, 9))
 
-    ax_source = plot_panel_source(fig.add_subplot(grid[0, 2:]), transfer_learning)
+    plot_panel_cross_task(fig.add_subplot(grid[0, 0:2]),
+                          decoding_cross,
+                          decoding_imag,
+                          decoding_exec)
     
-    ax_cross_task = plot_cross_task_panel(fig.add_subplot(grid[0, 0:2]), cross_data)
-    ax_cross_task = add_to_cross_task_plot(ax_cross_task, decoding_data, cross_data)
-
-    ax_first_component = plot_first_component(fig.add_subplot(grid[1, 0]))
+    plot_panel_transfer_learning(fig.add_subplot(grid[0, 2:]), 
+                                 decoding_trans)
     
-    within_results = decoding_data_exec[2, :, :, 0, 1].mean(axis=1)
-    ax_matrix = plot_matrix(fig.add_subplot(grid[1, 1:3]), transfer_learning, within_results)
+    plot_panel_first_components(fig.add_subplot(grid[1, 0]), covariance_move, covariance_rest)
 
-    ax_cross_task.set_title('Cross-task', fontsize='xx-large')
-    ax_cross_task.set_yticks(np.arange(10)/10)
-    ax_cross_task.set_ylim(.4, .8)
-
-    ax_matrix.set_title('Cross-participant', fontsize='xx-large')
-    ax_cross_task.set_ylabel('Area under the curve', fontsize='xx-large')
+    plot_matrix(fig.add_subplot(grid[1, 1:3]), 
+                decoding_trans,
+                decoding_exec[TEN_PCS_IDX, :, :].mean(axis=-1))
 
     fig.tight_layout()
 
-    # fig.savefig('tmp.png')
-    # return
     fig.savefig('./figures/figure_4_transfer_learning.png')
     fig.savefig('./figures/figure_4_transfer_learning.svg')
-
