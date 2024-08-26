@@ -125,7 +125,7 @@ def plot_panel_transfer_learning(ax, data):
     ax.set_xticklabels(mappings.PPTS, fontsize='x-large')
 
     ax.set_title('Cross-participant', fontsize='xx-large')
-    ax.set_xlabel('Source participant' if not target else 'Target participant', fontsize='xx-large')
+    ax.set_xlabel('Source participant', fontsize='xx-large')
 
     ax.set_ylim(0.4, 1)
     ax.axhline(0.5, linestyle='--', color='black', alpha=0.7)
@@ -148,7 +148,7 @@ def plot_panel_transfer_learning(ax, data):
 def plot_matrix(ax, data, data_within):
 
     # Add within ppt scores on the diagonal
-    data[np.arange(N_PPTS), np.arange(N_PPTS)] = data_within  
+    data[np.arange(N_PPTS), np.arange(N_PPTS)] = data_within
 
     ax.imshow(data, cmap='plasma', vmin=0.25, vmax=1)
 
@@ -189,6 +189,7 @@ def make(path):
     grid = GridSpec(2, 5)
     fig = plt.figure(figsize=(16, 9))
 
+    
     plot_panel_cross_task(fig.add_subplot(grid[0, 0:2]),
                           decoding_cross,
                           decoding_imag,
