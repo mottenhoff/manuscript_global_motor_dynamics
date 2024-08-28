@@ -106,6 +106,7 @@ def plot_explained_variances(data):
     cmap = mappings.color_map()
     x = np.arange(max(PCS))
     x_ticks = np.arange(0, max(PCS)+1, 10)
+    x_tick_labels = x_ticks
     y_ticks = np.arange(0, 101, 20) / 100
     y_tick_labels = np.arange(0, 101, 20)
 
@@ -137,11 +138,12 @@ def plot_explained_variances(data):
                               mean_cumulative_ev + std_cumulative_ev,
                               color='black',
                               alpha=0.2)
-        axs[idx].axvline(scree_line, ymin=0, ymax=1, color='black', linestyle='--')
+        axs[idx].axvline(scree_line, ymin=0, ymax=1, color='black', alpha=0.8, linestyle='--', linewidth=1)
 
         axs[idx].set_xticks(x_ticks)
         axs[idx].set_yticks(y_ticks)
-        axs[idx].set_yticklabels(y_tick_labels)
+        axs[idx].set_xticklabels(x_tick_labels, fontsize='x-large')
+        axs[idx].set_yticklabels(y_tick_labels, fontsize='x-large')
 
         axs[idx].spines[['top', 'right']].set_visible(False)
 
@@ -158,7 +160,7 @@ def plot_explained_variances(data):
     fig.savefig(f'./figures/figure_5_explained_variance.svg')
     plt.close('all')
 
-def plot_first_n_components_per_ppt(data, n_components=10, name=None):
+def plot_first_n_components_per_ppt(data, n_components=10):
 
     savepath = Path('./figures/pcs/')
     savepath.mkdir(exist_ok=True, parents=True)
@@ -171,7 +173,8 @@ def plot_first_n_components_per_ppt(data, n_components=10, name=None):
         all_move, all_rest = extract_move_rest_per_condition(data[task][filter_])
 
         for ppt in range(mappings.N_PPTS):
-            
+            print(f'plotting: {task} {filter_} p{ppt}')
+
             move, rest = all_move[ppt, :, :], all_rest[ppt, :, :]
 
             fig, axs = plt.subplots(nrows=n_components,
@@ -204,12 +207,13 @@ def plot_first_n_components_per_ppt(data, n_components=10, name=None):
                 axs[x_idx, y_idx].plot(rest[:, x_idx], rest[:, y_idx], color=COLOR_REST, linewidth=1)
                 axs[x_idx, y_idx].plot(move[:, x_idx], move[:, y_idx], color=COLOR_MOVE, linewidth=1)
 
-            fig.suptitle(f'{task.capitalize()} {filter_.capitalize()} | Participant {idx+1}', fontsize=30)
+            fig.suptitle(f'{task.capitalize()} {filter_.capitalize()} | Participant {ppt+1}', fontsize=30)
             fig.tight_layout()
 
-            fig.savefig(savepath/f'figure_5_pcs_{task}_{filter_}_ppt{idx}.png')
-            fig.savefig(savepath/f'figure_5_pcs_{task}_{filter_}_ppt{idx}.svg')
-            plt.close('all')
+            print(f'saving: {task} {filter_} p{ppt}')
+            fig.savefig(savepath/f'figure_5_pcs_{task}_{filter_}_p{ppt+1}.png')
+            fig.savefig(savepath/f'figure_5_pcs_{task}_{filter_}_p{ppt+1}.svg')
+            plt.close()
     
 def plot_figure_component_space(data, individual_trajectories=False):
 
@@ -285,9 +289,9 @@ def make(path: Path):
 
     data = load_data(path, TASKS, FILTERS)
 
-    plot_figure_component_space(data)
-    plot_figure_component_space(data, individual_trajectories=True)
+    # plot_figure_component_space(data)
+    # plot_figure_component_space(data, individual_trajectories=True)
     plot_first_n_components_per_ppt(data)
-    plot_explained_variances(data)
+    # plot_explained_variances(data)
 
 
