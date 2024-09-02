@@ -1,9 +1,8 @@
 # Builtin
-import cProfile
 import logging
 from pathlib import Path
 from itertools import product
-from multiprocessing import Process, Pool
+from multiprocessing import Pool
 
 # 3th party
 import yaml
@@ -25,17 +24,6 @@ c = load_yaml('./config.yml')
 
 TASK = 0
 FILTERS = 1
-
-# def is_valid(fileset):
-#     ppt_id = fileset[0].parts[1]
-
-#     if ppt_id not in c.ppts_to_include:
-#         return False
-
-#     if fileset[0].parts[-2] == '2':
-#         return False
-    
-#     return True
 
 def make_paths(savepath, task, filters, ppt_id):
     filter_str = ''.join(filters.keys())

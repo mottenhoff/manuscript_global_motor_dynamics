@@ -7,6 +7,8 @@ import matplotlib.cm as cm
 import matplotlib.pyplot as plt
 import numpy as np
 
+from mne.filter import filter_data
+
 from libs import mappings
 
 TASKS   = ('grasp', 'imagine')
@@ -177,6 +179,11 @@ def plot_first_n_components_per_ppt(data, n_components=10):
 
             move, rest = all_move[ppt, :, :], all_rest[ppt, :, :]
 
+            low, high = 0, 0.1
+            move = filter_data(move.T, 1024, low, high).T
+            rest = filter_data(rest.T, 1024, low, high).T
+
+
             fig, axs = plt.subplots(nrows=n_components,
                                     ncols=n_components,
                                     figsize=(10, 10))
@@ -213,8 +220,10 @@ def plot_first_n_components_per_ppt(data, n_components=10):
             print(f'saving: {task} {filter_} p{ppt}')
             fig.savefig(savepath/f'figure_5_pcs_{task}_{filter_}_p{ppt+1}.png')
             fig.savefig(savepath/f'figure_5_pcs_{task}_{filter_}_p{ppt+1}.svg')
+            # plt.show(block=True)
             plt.close()
-    
+
+
 def plot_figure_component_space(data, individual_trajectories=False):
 
     fig, axs = plt.subplots(nrows=N_TASKS, ncols=N_FILTERS, figsize=(12, 8))
@@ -289,9 +298,9 @@ def make(path: Path):
 
     data = load_data(path, TASKS, FILTERS)
 
-    # plot_figure_component_space(data)
-    # plot_figure_component_space(data, individual_trajectories=True)
+    plot_figure_component_space(data)
+    plot_figure_component_space(data, individual_trajectories=True)
     plot_first_n_components_per_ppt(data)
-    # plot_explained_variances(data)
+    plot_explained_variances(data)
 
 

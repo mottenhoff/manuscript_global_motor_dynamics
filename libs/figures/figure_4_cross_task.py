@@ -1,5 +1,6 @@
 import numpy as np
 import matplotlib.cm as cm
+from scipy import stats
 
 from libs import mappings
 
@@ -17,8 +18,10 @@ TEST = 1
 PCS = [3, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50]
 N_PCS = len(PCS)
 N_PPTS = len(mappings.PPTS)
-COLORS = {'exec':  cm.plasma(0),    # Rest in fig 1
-          'imag':  cm.plasma(127)}  # Move in fig 1
+COLORS = {'exec':  cm.plasma(0),
+          'imag':  cm.plasma(127),
+          'lightgrey': np.array((211/255, 211/255, 211/255, 1.0))} 
+
 
 
 def fdrcorrection(p):
@@ -41,22 +44,53 @@ def annotate_min_max(ax):
 
     return ax
 
+def get_scatter_colors(p_values, task):
+    facecolors = np.where(p_values < .05)
+    facecolors = np.array([COLORS[task] if p_value <0.05 else COLORS['lightgrey'] for p_value in p_values])
+    edgecolors = np.tile(np.array(COLORS[task]), (facecolors.size, 1))
+    return facecolors, edgecolors
+
 def plot_panel(ax, data_cross, data_imag, data_exec):
 
     shape_exec = data_exec.shape
     shape_imag = data_imag.shape
 
-    # STD calculation here is different than the manuscript. Here is it the std over all folds,
-    #     in the paper its the std over the means, resulting in a smaller std in the paper
-    # See this line: np.std([np.mean(aucs[:, s:e]) for s, e in zip(np.arange(0, 72, 8), np.arange(8, 80, 8))])
-    # mean, std = aucs.mean(axis=1), aucs.std(axis=1)
+    # Check if above chance
+    # note that within task performance has 80 samples here,
+    # while between task has only 8 samples. Because no cross
+    # validation for cross task.
+    p_values = []
+    for data in [data_cross['grasp-to-imagine'][:, :, AUC].T,
+                 data_cross['imagine-to-grasp'][:, :, AUC].T,
+                 data_exec.reshape(shape_exec[0], -1),
+                 data_imag.reshape(shape_imag[0], -1)]:
+        t, p = stats.ttest_1samp(data, .5, axis=1)
+        p = fdrcorrection(p)
+        p_values.append(p)
 
-    # t, p = stats.ttest_1samp(aucs, .5, axis=1)
-    # p = fdrcorrection(p)
+    p_values = np.array(p_values)
 
-    # ax = annotate_min_max(ax)
-    # facecolors = np.where(p<0.05, 'black', 'lightgrey')
-    # edgecolors = ['black'] * facecolors.size
+    print('is exec-to-imag sig diff than imag-to-imag?')
+    F, p = stats.f_oneway(data_imag.flatten(), 
+                          data_cross['grasp-to-imagine'][:, :, AUC].flatten())
+    print(f'one-way anova: p={p}')
+
+    if p<0.05:
+        for pc in range(data_imag.shape[0]):
+            t, p = stats.ttest_ind(data_imag[pc, :, :].flatten(),
+                                   data_cross['grasp-to-imagine'][:, pc, AUC])
+            print(PCS[pc], p*N_PCS<0.05, p*N_PCS)
+
+    print('is imag-to-exec sig diff than imag-to-imag?')
+    F, p = stats.f_oneway(data_exec.flatten(), 
+                          data_cross['imagine-to-grasp'][:, :, AUC].flatten())
+    print(f'one-way anova: p={p}')
+
+    if p<0.05:
+        for pc in range(data_exec.shape[0]):
+            t, p = stats.ttest_ind(data_exec[pc, :, :].flatten(),
+                                   data_cross['imagine-to-grasp'][:, pc, AUC])
+            print(PCS[pc], p*N_PCS<0.05, p*N_PCS)
 
     gti_mean = data_cross['grasp-to-imagine'].mean(axis=0)[:, AUC]
     itg_mean = data_cross['imagine-to-grasp'].mean(axis=0)[:, AUC]
@@ -65,22 +99,27 @@ def plot_panel(ax, data_cross, data_imag, data_exec):
 
 
     ax.plot(PCS, gti_mean, linestyle='solid', color=COLORS['imag'], label='Execute to Imagine')
-    ax.scatter(PCS, gti_mean, facecolors=COLORS['imag'], edgecolors=COLORS['imag'], s=25, zorder=2)
+    facecolors, edgecolors = get_scatter_colors(p_values[0, :], 'imag')
+    ax.scatter(PCS, gti_mean, facecolors=facecolors, edgecolors=edgecolors, s=25, zorder=2)
 
     ax.plot(PCS, itg_mean, linestyle='solid', color=COLORS['exec'], label='Imagine to Execute')
-    ax.scatter(PCS, itg_mean, facecolors=COLORS['exec'], edgecolors=COLORS['exec'], s=25, zorder=2)
+    facecolors, edgecolors = get_scatter_colors(p_values[1, :], 'exec')
+    ax.scatter(PCS, itg_mean, facecolors=facecolors, edgecolors=edgecolors, s=25, zorder=2)
 
     ax.plot(PCS, exec_mean, linestyle='dashed', color=COLORS['exec'],label='Execute to Execute')
-    ax.scatter(PCS, exec_mean, facecolors=COLORS['exec'], edgecolors=COLORS['exec'], s=25, zorder=2)
+    facecolors, edgecolors = get_scatter_colors(p_values[2, :], 'exec')
+    ax.scatter(PCS, exec_mean, facecolors=facecolors, edgecolors=edgecolors, s=25, zorder=2)
 
     ax.plot(PCS, imag_mean, linestyle='dashed',color=COLORS['imag'], label='Imagine to Imagine')
-    ax.scatter(PCS, imag_mean, facecolors=COLORS['imag'], edgecolors=COLORS['imag'], s=25, zorder=2)
+    facecolors, edgecolors = get_scatter_colors(p_values[3, :], 'imag')
+    ax.scatter(PCS, imag_mean, facecolors=facecolors, edgecolors=edgecolors, s=25, zorder=2)
 
     ax.axhline(0.5, linestyle='--', color='black', alpha=0.7)
     
     ax.legend(frameon=False, loc='upper left')
     ax.set_xlabel('Principal components', fontsize='xx-large')
     ax.set_ylabel('Area under the curve', fontsize='xx-large')
+    ax.set_title('Cross-task', fontsize='xx-large')
     ax.set_xticks(PCS)
     ax.set_xlim(0, 50)
     ax.set_ylim(0.4, 1)

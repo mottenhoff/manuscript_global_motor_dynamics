@@ -21,7 +21,6 @@ N_FOLDS = 10
 
 PC_IDX = -3
 PPT_IDX = -2
-TEN_PCS = 10
 TEN_PCS_IDX = 2
 
 def fdrcorrection(p):
@@ -76,7 +75,7 @@ def get_cross_data(main_path):
 
     return result
 
-def load_transfer_learning_data(path, task, filter_):
+def load_transfer_learning_data(path, pcs, task, filter_):
     ''' Data is returned in a 8 x 7 matrix, following the
     pattern below. A diagonal of zeroes is added to make
     an 8x8 matrix and align the rows and column to reflect
@@ -93,7 +92,7 @@ def load_transfer_learning_data(path, task, filter_):
     sc = np.vstack([np.insert(row, i, 0) for i, row in enumerate(sanity_check)])
     '''
 
-    path = path/f'pc{TEN_PCS}'/f'{task}'/f'{filter_}'/'transfer_auc.npy'
+    path = path/f'pc{pcs}'/f'{task}'/f'{filter_}'/'transfer_auc.npy'
     data = np.load(path).reshape(8, 7)
     
     # insert a diagonal of zeroes to create an 8x8 matrix
@@ -127,7 +126,7 @@ def plot_panel_transfer_learning(ax, data):
     ax.set_title('Cross-participant', fontsize='xx-large')
     ax.set_xlabel('Source participant', fontsize='xx-large')
 
-    ax.set_ylim(0.4, 1)
+    ax.set_ylim(.4, 1)
     ax.axhline(0.5, linestyle='--', color='black', alpha=0.7)
 
     ax.spines['top'].set_visible(False)
@@ -149,6 +148,13 @@ def plot_matrix(ax, data, data_within):
 
     # Add within ppt scores on the diagonal
     data[np.arange(N_PPTS), np.arange(N_PPTS)] = data_within
+
+    stds = []
+    for i, row in enumerate(data.T):
+        row = list(row)
+        row.pop(i)
+        stds.append(np.std(row))
+    print(np.mean(stds), np.std(stds))
 
     ax.imshow(data, cmap='plasma', vmin=0.25, vmax=1)
 
@@ -173,38 +179,39 @@ def plot_matrix(ax, data, data_within):
     return ax
 
 def make(path):
-    filters = ['beta'] #, 'hg', 'betahg')
-    task = ('grasp')  # For transfer learning
+    filters = ['beta', 'hg', 'betahg']
+    tasks = ('grasp', 'imagine')
 
     path_cross_task = Path(r'results/cross_task/')
     path_full =       Path(r'results/full_run/')
-    
-    decoding_exec =  [get_data(path_full/'grasp'/filter_,   'full') for filter_ in filters][0]
-    decoding_imag =  [get_data(path_full/'imagine'/filter_, 'full') for filter_ in filters][0]
-    decoding_cross = [get_cross_data(path_cross_task/filter_) for filter_ in filters][0]
-    decoding_trans = [load_transfer_learning_data(path, task, filter_) for filter_ in filters][0]
-    covariance_move, covariance_rest = [load_covariance_matrices(path_full/'grasp'/filter_)\
-                                        for filter_ in filters][0]
 
-    grid = GridSpec(2, 5)
-    fig = plt.figure(figsize=(16, 9))
+    for pcs, filter_, task in product(PCS, filters, tasks):
 
-    
-    plot_panel_cross_task(fig.add_subplot(grid[0, 0:2]),
-                          decoding_cross,
-                          decoding_imag,
-                          decoding_exec)
-    
-    plot_panel_transfer_learning(fig.add_subplot(grid[0, 2:]), 
-                                 decoding_trans)
-    
-    plot_panel_first_components(fig.add_subplot(grid[1, 0]), covariance_move, covariance_rest)
+        decoding_exec =  get_data(path_full/'grasp'/filter_,   'full')
+        decoding_imag =  get_data(path_full/'imagine'/filter_, 'full')
+        decoding_cross = get_cross_data(path_cross_task/filter_)
+        decoding_trans = load_transfer_learning_data(path, pcs, task, filter_)
+        covariance_move, covariance_rest = load_covariance_matrices(path_full/task/filter_)
 
-    plot_matrix(fig.add_subplot(grid[1, 1:3]), 
-                decoding_trans,
-                decoding_exec[TEN_PCS_IDX, :, :].mean(axis=-1))
+        grid = GridSpec(2, 5)
+        fig = plt.figure(figsize=(16, 9))
 
-    fig.tight_layout()
+        plot_panel_cross_task(fig.add_subplot(grid[0, 0:2]),
+                            decoding_cross,
+                            decoding_imag,
+                            decoding_exec)
+        
+        plot_panel_transfer_learning(fig.add_subplot(grid[0, 2:]), 
+                                    decoding_trans)
+        
+        plot_panel_first_components(fig.add_subplot(grid[1, 0]), covariance_move, covariance_rest)
 
-    fig.savefig('./figures/figure_4_transfer_learning.png')
-    fig.savefig('./figures/figure_4_transfer_learning.svg')
+        plot_matrix(fig.add_subplot(grid[1, 1:3]), 
+                    decoding_trans,
+                    decoding_exec[PCS.index(pcs), :, :].mean(axis=-1))
+
+        fig.tight_layout()
+
+        fig.savefig(f'./figures/figure_4_transfer_learning_pc{pcs}_{task}_{filter_}.png')
+        fig.savefig(f'./figures/figure_4_transfer_learning_pc{pcs}_{task}_{filter_}.svg')
+        plt.close()

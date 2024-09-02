@@ -5,10 +5,7 @@ import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 from mne.filter import filter_data
 from matplotlib.gridspec import GridSpec
-from matplotlib.text import Annotation
 from pyriemann.estimation import Covariances
-
-# from cmcrameri import cm
 
 from libs.load import load_session
 
@@ -16,20 +13,6 @@ COLORS = {'rest':  cm.plasma(0),
           'left':  cm.plasma(127),
           'right': cm.plasma(255),
           'move':  cm.plasma(127)}
-
-
-# COLORS = {'rest':  cm.batlow(0),
-#           'left':  cm.batlow(127),
-#           'right': cm.batlow(255),
-#           'move':  cm.batlow(127)}
-# cmap = cm.managua
-
-# COLORS = {'rest':  cmap(30),
-#           'left':  cmap(127),
-#           'right': cmap(255),
-#           'move':  cmap(225)}
-
-
 
 NORM = 'symlog'
 
@@ -275,121 +258,8 @@ def make(path):
     fig = plt.figure(figsize=(16, 9))
 
     plot_raw_data(fig.add_subplot(grid[1, 0]), data_raw)
-
-    # plot_sample_covariance_matrix(fig.add_subplot(grid[1, 0]))
-    # plot_move_geometric_mean(fig.add_subplot(grid[1, 1]))
-    # plot_rest_geometric_mean(fig.add_subplot(grid[1, 3]))
-    # plot_3d_lowdimrep_1class()
-    # plot_3d_lowdimrep_2class()
-
-    
-    return
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-# def get_line_a():
-#     t = np.linspace(0, 8, 100)
-#     x = np.cos(t)
-#     y = np.sin(t)
-#     z = t
-#     return x, y, z
-
-# def get_line_b():
-#     t = np.linspace(0, 8, 100)
-#     x = t
-#     y = np.sqrt(t*0.5)
-#     z = t
-#     return x, y, z
-
-# def plot_line_and_proj(ax, x, y, z, plane, color):
-#     plane_normal, plane_origin = plane
-
-#     ax.plot(x, y, z, color=color, linestyle='solid', label='Line in 3D')
-
-#     # Calculate the orthogonal projection of the line onto the plane
-#     d = np.dot(plane_normal, plane_origin)
-#     t_plane = (d - np.dot(plane_normal, np.vstack((x, y, z)))) / np.dot(plane_normal, plane_normal)
-#     x_orthogonal = x + t_plane * plane_normal[0]
-#     y_orthogonal = y + t_plane * plane_normal[1]
-#     z_orthogonal = z + t_plane * plane_normal[2]
-
-#     # Plot the orthogonal projection on the plane in 3D
-#     ax.plot(x_orthogonal, y_orthogonal, z_orthogonal, color=color, linestyle='dashed', label='Orthogonal Projection on Plane')
-#     return ax
-
-# def plot_coordinate_system(ax, o, o_scale, scale):
-#     X, Y, Z = [0, 1, 2]
-#     color = 'grey'
-#     zorder = 1.1
-
-#     line = np.array([-1, 1])
-#     zero = np.array([0, 0])
-#     line *= o_scale
-#     o *= scale
-
-#     ax.plot(line + o[X], zero + o[Y], zero + o[Z], color=color, linewidth=1, zorder=zorder)
-#     ax.plot(zero + o[X], line + o[Y], zero + o[Z], color=color, linewidth=1, zorder=zorder)
-#     ax.plot(zero + o[X], zero + o[Y], line + o[Z], color=color, linewidth=1, zorder=zorder)
-
-#     return ax
-
-# def plot_3d_plane_example(ax):
-#     # Create a 3D figure
-#     # fig = plt.figure()
-#     # ax = fig.add_subplot(111, projection='3d')
-
-#     # Plot the line in 3D
-#     ax.plot(*get_line_a(), color='blue', linestyle='solid', label='Line in 3D')
-
-#     # Define the plane
-#     plane_normal = np.array([.5, .5, 1])  # Normal vector to the plane
-#     plane_origin = np.array([0, 0, 0])  # A point on the plane
-#     d = np.dot(plane_normal, plane_origin)
-
-#     plane = [plane_normal, plane_origin]
-#     # Create a meshgrid to plot the plane
-#     line = np.linspace(-1, 1, 10)
-#     scale = 5
-#     curvature_factor = 0
-
-#     xx, yy = np.meshgrid(line * scale, line * scale)
-#     # zz = (-plane_normal[0] * xx**2 * curvature_factor - plane_normal[1] * yy + d) / plane_normal[2]
-#     zz = (-plane_normal[0] * xx - plane_normal[1] * yy + d) / plane_normal[2]
-
-#     ax.plot_surface(xx, yy, zz, alpha=.8, color='lightgray', zorder=1.2)
-
-#     # Plot the projection
-#     ax = plot_line_and_proj(ax, *get_line_a(), plane, 'blue')
-#     ax = plot_line_and_proj(ax, *get_line_b(), plane, 'orange')
-
-#     # ax.axis('off')
-#     ax.set_xlabel('X')
-#     ax.set_ylabel('Y')
-#     ax.set_zlabel('Z')
-
-#     origin = np.array([-1, 1, -1])
-#     origin_scale = 10
-#     plot_coordinate_system(ax, origin, origin_scale, scale)
-
-#     lim = np.array([-1, 1])
-#     ax.set_xlim(lim*scale)
-#     ax.set_ylim(lim*scale)
-#     ax.set_zlim(lim*scale)
-
-#     ax.axis('off')
-#     # Coord location: -x +y, -z
-#     return ax
+    plot_sample_covariance_matrix(fig.add_subplot(grid[1, 0]))
+    plot_move_geometric_mean(fig.add_subplot(grid[1, 1]))
+    plot_rest_geometric_mean(fig.add_subplot(grid[1, 3]))
+    plot_3d_lowdimrep_1class()
+    plot_3d_lowdimrep_2class()

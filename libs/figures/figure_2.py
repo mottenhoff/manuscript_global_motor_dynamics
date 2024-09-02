@@ -153,7 +153,7 @@ def check_stat_diff_e_i(data):
         eb = eb.mean(axis=-1).T
         ib = ib.mean(axis=-1).T
 
-        with open(f'exec_vs_imag_{groups[i]}_stats.txt', 'w') as f:
+        with open(f'/figures/exec_vs_imag_{groups[i]}_stats.txt', 'w') as f:
                 
             # Step 1: Perform one-way ANOVA
             F, p = stats.f_oneway(eb.flatten(), ib.flatten())
@@ -186,7 +186,7 @@ def make(path):
     N_COLS = 4
     N_ROWS = 3
 
-    fig, axs = plt.subplots(nrows=N_ROWS, ncols=N_COLS, figsize=(16, 9))
+    fig, axs = plt.subplots(nrows=N_ROWS, ncols=N_COLS, figsize=(20, 9))
     fig.suptitle('')
 
     ax_eb =   plot_panel(axs[0, 0], data[EXEC_BETA])

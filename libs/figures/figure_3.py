@@ -111,8 +111,8 @@ def plot_panel_mean_std(ax, data, opt):
 
 def make(path):
 
-    task = ('grasp') #, 'imagine')
-    filter_ = ('beta') #, 'hg', 'betahg')
+    task = ('grasp', 'imagine')
+    filter_ = ('beta', 'hg', 'betahg')
 
     data = get_data(path/task/filter_, 'dropout')
 
