@@ -1,0 +1,16 @@
+**/__pycache__/
+/_archive
+/data
+/results
+/transfer_results
+/successful_runs
+/figures
+/figures_backup
+
+.gitignore
+
+*.npy
+*.png
+*.txt
+
+plot_3d_brains.py
