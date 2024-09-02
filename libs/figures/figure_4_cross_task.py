@@ -1,8 +1,5 @@
-from itertools import product
-
-import matplotlib.pyplot as plt
 import numpy as np
-from matplotlib.gridspec import GridSpec
+import matplotlib.cm as cm
 from scipy import stats
 
 from libs import mappings
@@ -18,9 +15,19 @@ BAC = 1
 TRAIN = 0
 TEST = 1
 
+PCS = [3, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50]
+N_PCS = len(PCS)
+N_PPTS = len(mappings.PPTS)
+COLORS = {'exec':  cm.plasma(0),
+          'imag':  cm.plasma(127),
+          'lightgrey': np.array((211/255, 211/255, 211/255, 1.0))} 
+
+
+
 def fdrcorrection(p):
     """Benjamini-Hochberg p-value correction for multiple hypothesis testing."""
-    p = np.asfarray(p)
+    # p = np.asfarray(p)
+    p = np.array(p, dtype=np.float64)
     by_descend = p.argsort()[::-1]
     by_orig = by_descend.argsort()
     steps = float(len(p)) / np.arange(len(p), 0, -1)
@@ -37,75 +44,87 @@ def annotate_min_max(ax):
 
     return ax
 
-def get_data(path, type_):
-    # data = [pcs, ppts, folds, metrics, train/test]
+def get_scatter_colors(p_values, task):
+    facecolors = np.where(p_values < .05)
+    facecolors = np.array([COLORS[task] if p_value <0.05 else COLORS['lightgrey'] for p_value in p_values])
+    edgecolors = np.tile(np.array(COLORS[task]), (facecolors.size, 1))
+    return facecolors, edgecolors
 
-    dirs = [d for d in path.iterdir() if d.is_dir() and 'pc' in d.stem]
-    dirs = sorted(dirs, key=lambda x:int(x.stem[2:]))
+def plot_panel(ax, data_cross, data_imag, data_exec):
 
-    data = []
-    for d in dirs:
-        data += [np.stack([np.load(ppt/f'{type_}.npy') for ppt in d.iterdir()])]
+    shape_exec = data_exec.shape
+    shape_imag = data_imag.shape
 
-    return np.stack(data)
+    # Check if above chance
+    # note that within task performance has 80 samples here,
+    # while between task has only 8 samples. Because no cross
+    # validation for cross task.
+    p_values = []
+    for data in [data_cross['grasp-to-imagine'][:, :, AUC].T,
+                 data_cross['imagine-to-grasp'][:, :, AUC].T,
+                 data_exec.reshape(shape_exec[0], -1),
+                 data_imag.reshape(shape_imag[0], -1)]:
+        t, p = stats.ttest_1samp(data, .5, axis=1)
+        p = fdrcorrection(p)
+        p_values.append(p)
 
-def plot_panel(ax, data):
+    p_values = np.array(p_values)
 
-    pcs = np.concatenate([[3], np.arange(5, 51, 5)])
+    print('is exec-to-imag sig diff than imag-to-imag?')
+    F, p = stats.f_oneway(data_imag.flatten(), 
+                          data_cross['grasp-to-imagine'][:, :, AUC].flatten())
+    print(f'one-way anova: p={p}')
 
-    ppts = np.arange(data.shape[1])
-    colors = [mappings.color_map()[f'p{i+1}'] for i in ppts]
+    if p<0.05:
+        for pc in range(data_imag.shape[0]):
+            t, p = stats.ttest_ind(data_imag[pc, :, :].flatten(),
+                                   data_cross['grasp-to-imagine'][:, pc, AUC])
+            print(PCS[pc], p*N_PCS<0.05, p*N_PCS)
 
-    aucs = data[:, :, :, AUC, TEST].reshape(data.shape[0], np.multiply(*data.shape[1:3]))
+    print('is imag-to-exec sig diff than imag-to-imag?')
+    F, p = stats.f_oneway(data_exec.flatten(), 
+                          data_cross['imagine-to-grasp'][:, :, AUC].flatten())
+    print(f'one-way anova: p={p}')
 
-    # STD calculation here is different than the manuscript. Here is it the std over all folds,
-    #     in the paper its the std over the means, resulting in a smaller std in the paper
-    # See this line: np.std([np.mean(aucs[:, s:e]) for s, e in zip(np.arange(0, 72, 8), np.arange(8, 80, 8))])
-    mean, std = aucs.mean(axis=1), aucs.std(axis=1)
+    if p<0.05:
+        for pc in range(data_exec.shape[0]):
+            t, p = stats.ttest_ind(data_exec[pc, :, :].flatten(),
+                                   data_cross['imagine-to-grasp'][:, pc, AUC])
+            print(PCS[pc], p*N_PCS<0.05, p*N_PCS)
 
-    t, p = stats.ttest_1samp(aucs, .5, axis=1)
-    p = fdrcorrection(p)
+    gti_mean = data_cross['grasp-to-imagine'].mean(axis=0)[:, AUC]
+    itg_mean = data_cross['imagine-to-grasp'].mean(axis=0)[:, AUC]
+    exec_mean = data_exec.reshape(shape_exec[0], -1).mean(axis=1)
+    imag_mean = data_imag.reshape(shape_imag[0], -1).mean(axis=1)
 
-    facecolors = np.where(p<0.05, 'black', 'lightgrey')
-    edgecolors = ['black'] * facecolors.size
 
-    ax.plot(pcs, mean, color='k', zorder=1)
-    ax.scatter(pcs, mean, facecolors=facecolors, edgecolors=edgecolors, s=25, zorder=2)
-    ax.fill_between(pcs, mean-std, mean+std, alpha=0.15, color='k')
+    ax.plot(PCS, gti_mean, linestyle='solid', color=COLORS['imag'], label='Execute to Imagine')
+    facecolors, edgecolors = get_scatter_colors(p_values[0, :], 'imag')
+    ax.scatter(PCS, gti_mean, facecolors=facecolors, edgecolors=edgecolors, s=25, zorder=2)
 
-    ax = annotate_min_max(ax)
+    ax.plot(PCS, itg_mean, linestyle='solid', color=COLORS['exec'], label='Imagine to Execute')
+    facecolors, edgecolors = get_scatter_colors(p_values[1, :], 'exec')
+    ax.scatter(PCS, itg_mean, facecolors=facecolors, edgecolors=edgecolors, s=25, zorder=2)
 
-    for i, ppt in enumerate(np.arange(data.shape[PPTS])):
-        ax.plot(pcs, data[:, ppt, :, AUC, TEST].mean(axis=1), color=colors[i], alpha=0.3)
+    ax.plot(PCS, exec_mean, linestyle='dashed', color=COLORS['exec'],label='Execute to Execute')
+    facecolors, edgecolors = get_scatter_colors(p_values[2, :], 'exec')
+    ax.scatter(PCS, exec_mean, facecolors=facecolors, edgecolors=edgecolors, s=25, zorder=2)
+
+    ax.plot(PCS, imag_mean, linestyle='dashed',color=COLORS['imag'], label='Imagine to Imagine')
+    facecolors, edgecolors = get_scatter_colors(p_values[3, :], 'imag')
+    ax.scatter(PCS, imag_mean, facecolors=facecolors, edgecolors=edgecolors, s=25, zorder=2)
 
     ax.axhline(0.5, linestyle='--', color='black', alpha=0.7)
-    ax.set_xlim(0, 50)
-    ax.set_ylim(0, 1)
     
+    ax.legend(frameon=False, loc='upper left')
+    ax.set_xlabel('Principal components', fontsize='xx-large')
+    ax.set_ylabel('Area under the curve', fontsize='xx-large')
+    ax.set_title('Cross-task', fontsize='xx-large')
+    ax.set_xticks(PCS)
+    ax.set_xlim(0, 50)
+    ax.set_ylim(0.4, 1)
+    ax.tick_params(axis='both', which='major', labelsize='x-large')
     ax.spines['right'].set_visible(False)
     ax.spines['top'].set_visible(False)
-    ax.set_xticks(pcs)
 
     return ax
-
-def make(path):
-    filters = ('beta', 'hg', 'betahg')
-
-    data = [get_data(path/filter_, 'full') for filter_ in filters]
-
-    N_COLS = 3
-    N_ROWS = 1
-
-
-    ax_idc = np.arange(N_COLS)
-
-    fig, axs = plt.subplots(nrows=N_ROWS, ncols=N_COLS, figsize=(16, 9))
-    fig.suptitle('')
-
-    for idx, d in zip(ax_idc, data):
-        plot_panel(axs[idx], d)
-
-    fig.savefig(r'./figures/figure_4_cross_task.png')
-    fig.savefig(r'./figures/figure_4_cross_task.svg')
-
-    return fig, axs

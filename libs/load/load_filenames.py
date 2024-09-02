@@ -26,18 +26,25 @@ def get_filenames(parent, extension, keywords=[], exclude=[]):
     
     return files
 
-def get_filesets(parent, keywords, exclude=[]):
-    keywords = [keywords] if type(keywords) is not list else keywords
-    exclude =   [exclude] if type(exclude)  is not list else exclude
+# def get_filesets(parent, keywords, exclude=[]):
+#     keywords = [keywords] if type(keywords) is not list else keywords
+#     exclude =   [exclude] if type(exclude)  is not list else exclude
 
-    parent = Path(parent)
+#     parent = Path(parent)
 
-    seeg_filenames =    get_filenames(parent, 'xdf', keywords=keywords, exclude=exclude)
-    contact_filenames = get_filenames(parent, 'csv', keywords=['electrode_locations'])
+#     seeg_filenames =    get_filenames(parent, 'xdf', keywords=keywords, exclude=exclude)
+#     contact_filenames = get_filenames(parent, 'csv', keywords=['electrode_locations'])
 
-    possible_sets = product(seeg_filenames, contact_filenames)
+#     possible_sets = product(seeg_filenames, contact_filenames)
 
-    return [(s, l) for s, l in possible_sets if s.parts[1] == l.parts[1]]
+#     return [(s, l) for s, l in possible_sets if s.parts[1] == l.parts[1]]
+
+def get_filesets(path: Path, task):
+    
+    return [
+        path/f'{task}.xdf',
+        path/'electrode_locations.csv'
+    ]
 
 
 if __name__=='__main__':

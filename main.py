@@ -1,14 +1,19 @@
 # Builtin
-import cProfile
 import logging
+from pathlib import Path
 from itertools import product
+from multiprocessing import Pool
+
+# 3th party
+import yaml
 
 # Local
-import setup_pipeline
+import setup
 from libs.explore import explore
 from libs.load.load_yaml import load_yaml
 from libs.load import load_session
 from libs.load.load_filenames import get_filesets
+
 from libs.process_session import process_session as process
 from libs import split_to_trials
 from libs.learn import decode_dropout
@@ -19,17 +24,6 @@ c = load_yaml('./config.yml')
 
 TASK = 0
 FILTERS = 1
-
-def is_valid(fileset):
-    ppt_id = fileset[0].parts[1]
-
-    if ppt_id not in c.ppts_to_include:
-        return False
-
-    if fileset[0].parts[-2] == '2':
-        return False
-    
-    return True
 
 def make_paths(savepath, task, filters, ppt_id):
     filter_str = ''.join(filters.keys())
@@ -49,56 +43,58 @@ def setup_debug(session):
 
     return session
 
-def run_pipeline(savepath):
+def run_pipeline(ppt, task, filter, savepath):
+
+    fileset = get_filesets(Path(c.paths.data)/ppt, task)
+        
+    session = load_session.load(fileset)
+    fullpath = make_paths(savepath, task, filter, session.ppt_id)
+
+    session = setup_debug(session) if c.debug.do else session
+
+    if c.plot.raw: 
+        plot_raw.make_all(session, fullpath)
+
+    session = process(session, filter)
+    
+    if session == 'invalid':
+        logger.warning('Encountered invalid timestamps. Skipping current dataset')  
+        return
+
+    session = split_to_trials.c2t(session)
+
+    if c.plot.pre:    plot_pre.make_all(session, fullpath)
+    if c.explore.do:  explore(session, fullpath)
+
+    decode_dropout(session, fullpath)
+
+
+def main():
+
+    savepath = setup.setup()
+    savepath = Path(savepath)
     
     tasks = ('grasp', 'imagine')
     filters = ({'beta': [12, 30]}, 
                {'hg':   [55, 90]},
                {'beta': [12, 30],
                 'hg':   [55, 90]})
+    ppts = c.ppts_to_include
 
-    for run_parameters in product(tasks, filters):        
+    jobs = product(ppts, tasks, filters)
 
-        task = run_parameters[TASK]
-        filters = run_parameters[FILTERS]
+    if c.parallel:
 
-        filesets = get_filesets(c.paths.data, task)
+        pool = Pool(processes=c.n_processes)
+
+        for ppt, task, filter in jobs:
+            pool.apply_async(run_pipeline, args=(ppt, task, filter, savepath))
+        pool.close()
+        pool.join()
     
-        for fileset in filesets:
-
-            if not is_valid(fileset):
-                continue
-
-            session = load_session.load(fileset)
-
-            fullpath = make_paths(savepath, task, filters, session.kh_id)
-
-            session = setup_debug(session) if c.debug.do else session
-
-            if c.plot.raw: plot_raw.make_all(session, fullpath)
-
-            session = process(session, filters)
-            
-            if session == 'invalid':
-                logger.warning('Encountered invalid timestamps. Skipping current dataset')  
-                continue
-
-            session = split_to_trials.c2t(session)
-
-            if c.plot.pre:    plot_pre.make_all(session, fullpath)
-            if c.explore.do:  explore(session, fullpath)
-
-            decode_dropout(session, fullpath)
-
-
-def main():
-
-    savepath = setup_pipeline.setup()
-
-    with cProfile.Profile() as pr:
-        run_pipeline(savepath)
-
-    setup_pipeline.profiler(pr, savepath)
+    else:
+        for ppt, task, filter in jobs:
+            run_pipeline(ppt, task, filter, savepath)
 
 if __name__=='__main__':
     main()

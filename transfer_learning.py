@@ -1,8 +1,7 @@
 from pathlib import Path
-from itertools import permutations, combinations, product  # or *_with replacements
+from itertools import permutations, product
 
 import numpy as np
-import scipy.stats
 from sklearn.metrics import roc_auc_score
 from pyriemann.estimation import Covariances
 from pyriemann.classification import MDM
@@ -10,19 +9,22 @@ from pyriemann.classification import MDM
 from libs import mappings
 
 DATA, LABELS = 0, 1
+REST, MOVE = 0, 1
 
-def get_data(path):
-
-    dirs = [d for d in path.iterdir() if d.is_dir() and 'pc' not in d.stem]
-    dirs = sorted(dirs, key=lambda x:int(x.stem[2:]))
-
-    data =   [np.load(d/f'processed_data.npy') for d in sorted(dirs)]
-    labels = [np.load(d/f'labels.npy')         for d in sorted(dirs)]
-    return data, labels
-
-def get_covs(x):
+def estimate_covariance_matrices(x):
     x = x.transpose(0, 2, 1)
     return Covariances(estimator='lwf').transform(x)
+
+def load_covariance_matrices(path):
+    sort_by_parent_dir = lambda p: p.parent.name
+
+    data =   [np.load(file) for file in sorted(path.rglob('processed_data.npy'), key=sort_by_parent_dir)]
+    labels = [np.load(file) for file in sorted(path.rglob('labels.npy'),         key=sort_by_parent_dir)]
+
+    covs = [estimate_covariance_matrices(cov) for cov in data]
+    labels = [np.where(l != 'rest', MOVE, REST) for l in labels]
+
+    return covs, labels
 
 def transfer_decode(source, target):
 
@@ -41,7 +43,8 @@ def transfer_decode(source, target):
 def transfer_learning(data, labels, components):
     ppts = zip(data, labels)
 
-    ppt_ids = list(mappings.kh_to_ppt().keys())
+    # ppt_ids = list(mappings.kh_to_ppt().keys())
+    ppt_ids = mappings.PPTS
     ppt_comparisons = list(permutations(ppt_ids, 2))
 
     aucs = np.empty(len(ppt_comparisons))
@@ -49,8 +52,6 @@ def transfer_learning(data, labels, components):
     for idx_c, (source, target) in enumerate(permutations(ppts, 2)):
         source, target = list(source), list(target)
         source[DATA], target[DATA] = source[DATA][:, :components, :components], target[DATA][:, :components, :components]
-
-        source[1], target[1] = np.where(source[1]=='move', 1, 0), np.where(target[1]=='move', 1, 0)
 
         aucs[idx_c] = transfer_decode(source, target)
         
@@ -62,26 +63,14 @@ def main(path):
 
     tasks =   ['grasp', 'imagine']
     filters = ['beta', 'hg', 'betahg']
-
-    # load data outside of loop
-    data = {f'{t}_{f}': get_data(path/t/f) for t, f in product(tasks, filters)}
-
-    # Calculate samples covariance matrices
-    for k, v in data.items():
-        covs = [get_covs(d) for d in v[0]]
-        data[k] = list(data[k])
-        data[k][0] = covs 
-
-    # components = np.arange(5, 51, 5)[::-1]
-    components = [10]
+    components = [3, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50]
 
     for npcs in components:
 
         for task, filter_ in product(tasks, filters):
             
-            covs, labels = data[f'{task}_{filter_}']
-
-            labels = [np.where(l=='rest', 'rest', 'move') for l in labels]  # binary
+            print(task, filter_)
+            covs, labels = load_covariance_matrices(path/task/filter_)
 
             savepath = Path(f'./transfer_results/pc{npcs}/{task}/{filter_}')
             savepath.mkdir(exist_ok=True, parents=True)

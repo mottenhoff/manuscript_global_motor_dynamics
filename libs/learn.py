@@ -15,8 +15,7 @@ from libs.load.load_yaml import load_yaml
 TRAIN = 0
 TEST = 1
 
-REST = 'rest'
-MOVE = 1
+REST, MOVE = 0, 1
 
 TRIALS = 0
 
@@ -157,16 +156,14 @@ def decode_dropout(session, savepath):
 
     trial_labels = np.where(session.trial_labels=='rest', REST, MOVE)
 
-    label_encoder = LabelEncoder().fit(trial_labels)
-
-    n_classes =    2                 # = label_encoder.classes_.size
-    n_dropouts =   len(dropouts)
-    n_repeats =    10
-    n_folds =      10
-    n_metrics =    2
+    n_classes =  2
+    n_dropouts = len(dropouts)
+    n_repeats =  10
+    n_folds =    10
+    n_metrics =  2
 
     x = session.trials
-    y = label_encoder.transform(trial_labels)
+    y = np.where(session.trial_labels=='rest', REST, MOVE)
 
     full_results =               np.empty((n_folds, n_metrics,  2))  # 2 = [train, test]
     full_confusion_matrices =    np.empty((n_folds, n_classes,  n_classes))  # Only test
@@ -175,9 +172,10 @@ def decode_dropout(session, savepath):
 
     for component in components:
 
-        path = savepath/f'pc{component}'/f'{session.kh_id}'
+        path = savepath/f'pc{component}'/f'{session.ppt_id}'
         path.mkdir(parents=True, exist_ok=True)
 
+        y_hat = np.empty(y.shape)
         for i_fold, fold in enumerate(get_folds_stratified(trial_labels, n_folds)):
 
             x_test, x_train = x[fold[TEST], :, :], x[fold[TRAIN], :, :]
@@ -188,9 +186,11 @@ def decode_dropout(session, savepath):
             y_hat_train =  run_decoder(x_train, pca, decoder)
             y_hat_test =   run_decoder(x_test, pca, decoder)
 
+            y_hat[fold[TEST]] = y_hat_test[:, 1]
+
             scores_train, scores_test = score(y_train, y_hat_train), score(y_test,  y_hat_test)
 
-            logger.info(f'{session.kh_id:<5s} | pc: {component:<3d} | Train: {scores_train[0]:<5.2f} | Test: {scores_test[0]:<5.2f}')
+            logger.info(f'{session.ppt_id:<5s} | pc: {component:<3d} | Train: {scores_train[0]:<5.2f} | Test: {scores_test[0]:<5.2f}')
 
             full_results[i_fold, :, :] = np.vstack([scores_train[:2], scores_test[:2]]).T
             full_confusion_matrices[i_fold, :, :] = scores_test[-1]
@@ -211,6 +211,9 @@ def decode_dropout(session, savepath):
                         
                         dropout_results[i_fold, i_dropout, repeat, :] =       scores_dropout[:2]
                         dropout_confusion_matrices[i_fold, i_dropout, :, :] = scores_dropout[-1]
+
+        with open(path/'y_hat.npy', 'wb') as f:
+            np.save(f, y_hat)
 
         with open(path/'full.npy', 'wb') as f:
             np.save(f, full_results)

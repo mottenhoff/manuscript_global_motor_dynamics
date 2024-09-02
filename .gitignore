@@ -1,24 +1,16 @@
-nohup.out
-
-*.log
-*.svg
-*.PNG
-*.png
-*.zip
-*.out
-
-*.pkl
-*.npy
-tmp.*
-
-/data/*
-/figures/*
-/results/*
+**/__pycache__/
 /_archive
+/data
+/results
+/transfer_results
+/successful_runs
+/figures
+/figures_backup
 
-__pycache__
-.vscode
+.gitignore
 
-data_osx
-successful_runs
-procrustus_results
+*.npy
+*.png
+*.txt
+
+plot_3d_brains.py

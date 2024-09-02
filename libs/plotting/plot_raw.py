@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -28,9 +30,14 @@ def raw_eeg(session, savepath):
             ax[row_i, col_i].set_ylabel(session.channels[ch_num])
             ax[row_i, col_i].set_ylim(-1000, 1000)
 
+
     fig.suptitle('Raw signal')
     fig.tight_layout()
-    fig.savefig('raw_eeg.png')
+
+    savedir = Path('figures/raw_eeg')
+    savedir.mkdir(parents=True, exist_ok=True)
+    fig.savefig(savedir/f'{session.ppt_id}_raw_eeg.png')
+    fig.savefig(savedir/f'{session.ppt_id}_raw_eeg.svg')
 
 def plot_average_trial_per_class(session, savepath):
     color_dict = {'rest': 'black',
@@ -80,7 +87,11 @@ def plot_average_trial_per_class(session, savepath):
         
     fig.suptitle('Raw signal averaged per trial')
     fig.legend()
-    fig.savefig('raw_eeg_averaged_per_trial.png')
+
+    savedir = Path('figures/raw_eeg_averaged_per_trial')
+    savedir.mkdir(parents=True, exist_ok=True)
+    fig.savefig(savedir/f'{session.ppt_id}_raw_eeg_averaged_per_trial.png')
+    fig.savefig(savedir/f'{session.ppt_id}_raw_eeg_averaged_per_trial.svg')
 
 def plot_task_correlation(session, savepath):
     eeg = session.eeg
@@ -99,6 +110,6 @@ def plot_task_correlation(session, savepath):
     fig.savefig(f'{savepath}/raw_task_correlation.png')
 
 def make_all(session, savepath):
-    raw_eeg(session, savepath)
-    # plot_average_trial_per_class(session, savepath)
+    # raw_eeg(session, savepath)
+    plot_average_trial_per_class(session, savepath)
     # plot_task_correlation(session, savepath)
